@@ -1,0 +1,55 @@
+---
+title: "IMDB Predictions"
+author: "Peters"
+date: "8/31/2020"
+output: html_document
+---
+
+Data avaiable through kaggle at: https://www.kaggle.com/c/imdb495
+
+Objective: Determine a model that will help us predict imdb scores.
+
+```{r setup, include=FALSE}
+library("tidyverse")
+```
+
+```{r}
+(test <- read.csv("imdb495/IMDBTest.csv"))
+(train <- read.csv("imdb495/IMDBTrain.csv"))
+```
+Summarize data
+
+```{r}
+pairs(~imdb_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
+
+```
+
+```{r}
+rating <- train %>%
+  group_by(content_rating) %>%
+  summarize(score = mean(imdb_score), n=n()) %>%
+  arrange(-score)
+
+rating
+barplot(rating$score, names.arg = rating$content_rating)
+```
+
+
+```{r}
+train %>%
+  group_by(color) %>%
+  summarize(score = mean(imdb_score), n=n()) %>%
+  arrange(-score)
+
+```
+
+```{r}
+
+dir <- train %>%
+  group_by(director_name) %>%
+  summarize(score = mean(imdb_score), n=n()) %>%
+  arrange(-score) %>%
+  filter(n > 1)
+
+plot(dir$score)
+```
