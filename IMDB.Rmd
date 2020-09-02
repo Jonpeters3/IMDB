@@ -17,11 +17,66 @@ library("tidyverse")
 (test <- read.csv("imdb495/IMDBTest.csv"))
 (train <- read.csv("imdb495/IMDBTrain.csv"))
 ```
+
 Summarize data
+
+```{r}
+summary(train)
+```
+
+Regression Imputation - Filling in missing values with the regression predicted values
+
+Try to clean variables 16-20
+
+```{r}
+ggplot(data=train, mapping=aes(x=gross, y=imdb_score)) +
+  geom_point()
+with(train, cor(gross, imdb_score, use="complete.obs"))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ```{r}
 pairs(~imdb_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
 
+```
+
+
+We notice some ridiculous budgets for our currency, so we will need to do some conversions.
+```{r}
+ggplot(data=train, mapping=aes(x=budget, y=imdb_score)) +
+  geom_point()
+
+train %>% filter(budget>1e9) %>% select(movie_title, country)
+```
+
+
+```{r}
+ggplot(data=train, mapping=aes(x=budget, y=imdb_score)) +
+  geom_point()
+
+train %>% filter(budget>100000000, country=="USA") %>% select(movie_title, country)
 ```
 
 ```{r}
@@ -53,3 +108,4 @@ dir <- train %>%
 
 plot(dir$score)
 ```
+
