@@ -26,41 +26,43 @@ summary(train)
 
 Regression Imputation - Filling in missing values with the regression predicted values
 
-Try to clean variables 16-20
+
+
+
+
+For Class on Friday
 
 ```{r}
-ggplot(data=train, mapping=aes(x=gross, y=imdb_score)) +
+train$facenumber_in_poster[is.na(train$facenumber_in_poster)] <- mean(train$facenumber_in_poster, na.rm = TRUE) #Replace posters with mean
+
+sum(is.na(train$plot_keywords)) #Sum of missing keywords, probably shou;d just drop?
+
+sum(is.na(train$movie_imdb_link)) #Sum of missing links, probably shou;d just drop?
+
+train$num_user_for_reviews[is.na(train$num_user_for_reviews)] <- median(train$facenumber_in_poster, na.rm = TRUE) #number of users
+
+train$language[is.na(train$language)] <-"English" #Replace language with english, most of the countries were USA, or english movies if country was NA
+
+train$country[is.na(train$country)] <-"USA" #Only 4 NA, either remove them or replace with USA
+
+train[is.na(train$content_rating),]  #Maybe this would be a good one to  use KNN or K-means? 274 missing values
+```
+
+
+
+
+
+
+
+
+
+```{r}
+ggplot(data=train, mapping=aes(x=log(num_user_for_reviews), y=imdb_score, color = content_rating)) +
   geom_point()
 with(train, cor(gross, imdb_score, use="complete.obs"))
 ```
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-```{r}
-pairs(~imdb_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
-
-```
 
 
 We notice some ridiculous budgets for our currency, so we will need to do some conversions.
@@ -98,14 +100,4 @@ train %>%
 
 ```
 
-```{r}
-
-dir <- train %>%
-  group_by(director_name) %>%
-  summarize(score = mean(imdb_score), n=n()) %>%
-  arrange(-score) %>%
-  filter(n > 1)
-
-plot(dir$score)
-```
 
