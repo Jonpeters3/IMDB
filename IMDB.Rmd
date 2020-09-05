@@ -14,11 +14,14 @@ library("tidyverse")
 ```
 
 ```{r}
+test <- read.csv("imdb495/IMDBTest.csv")
+train <- read.csv("imdb495/IMDBTrain.csv")
+ex <- read.csv("imdb495/exchange_rates.csv")
 
-(test <- read.csv("imdb495/IMDBTest.csv"))
-(train <- read.csv("imdb495/IMDBTrain.csv"))
-(ex <- read.csv("imdb495/exchange_rates.csv"))
 
+#we want to merge our test and training so that when we do out imputations are consistent
+names(test)[names(test) == "Id"] <- "movie_title"
+(imdb <- bind_rows(train = train, test = test, .id="Set"))
 ```
 
 Summarize data
@@ -29,18 +32,30 @@ summary(train)
 
 Regression Imputation - Filling in missing values with the regression predicted values
 
-
 ```{r}
-ggplot(data=train, mapping=aes(x=gross, y=imdb_score)) +
-  geom_point()
-with(train, cor(gross, imdb_score, use="complete.obs"))
+sum(is.na(train$plot_keywords))
+
+head(train$plot_keywords)
+colnames(train$genres %>% sapply(function(x) unlist(str_split(x, "\\|"))) %>% qdapTools::mtabulate())
+
+
+
+keywordDF <- as.data.frame((train$plot_keywords %>% sapply(function(x) unlist(str_split(x, "[\\| ]"))) %>% unlist %>% unname %>% table %>% sort.int(decreasing = TRUE)))
+
+keywordDF[-(keywordDF$. %in% stopwords::stopwords("en")), ]
+
+
 ```
+
+
 
 
 
 ```{r}
 pairs(~imdb_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
 ```
+
+
 For Class on Friday
 
 ```{r}
@@ -70,7 +85,13 @@ train$budget <- train$budget * tempDF$exchange_rate
 train$budget[is.na(train$budget)] <-median(train$budget, na.rm = TRUE)
 ```
 
+```{r}
+ggplot(data=train, mapping=aes(x=gross, y=imdb_score)) +
+  geom_point()
 
+
+with(train, cor(gross, imdb_score, use="complete.obs"))
+```
 
 
 
