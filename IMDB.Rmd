@@ -14,9 +14,10 @@ library("tidyverse")
 ```
 
 ```{r}
-(test <- read_csv("imdb495/IMDBTest.csv"))
-(train <- read_csv("imdb495/IMDBTrain.csv"))
-(exchange <- read_csv("imdb495/exchange_rates.csv"))
+
+(test <- read.csv("imdb495/IMDBTest.csv"))
+(train <- read.csv("imdb495/IMDBTrain.csv"))
+(ex <- read.csv("imdb495/exchange_rates.csv"))
 
 ```
 
@@ -28,12 +29,45 @@ summary(train)
 
 Regression Imputation - Filling in missing values with the regression predicted values
 
-Try to clean variables 16-20
 
 ```{r}
 ggplot(data=train, mapping=aes(x=gross, y=imdb_score)) +
   geom_point()
 with(train, cor(gross, imdb_score, use="complete.obs"))
+```
+
+
+
+```{r}
+pairs(~imdb_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
+```
+For Class on Friday
+
+```{r}
+train$facenumber_in_poster[is.na(train$facenumber_in_poster)] <- mean(train$facenumber_in_poster, na.rm = TRUE) #Replace posters with mean
+
+print("missing keywords: ")
+sum(is.na(train$plot_keywords)) #Sum of missing keywords, probably shou;d just drop?
+
+print("missing links: ")
+sum(is.na(train$movie_imdb_link)) #Sum of missing links, probably should just drop?
+
+train$num_user_for_reviews[is.na(train$num_user_for_reviews)] <- median(train$facenumber_in_poster, na.rm = TRUE) #number of users
+
+train$language[is.na(train$language)] <-"English" #Replace language with english, most of the countries were USA, or english movies if country was NA
+
+train$country[is.na(train$country)] <-"USA" #Only 4 NA, either remove them or replace with USA
+
+train[is.na(train$content_rating),]  #Maybe this would be a good one to  use KNN or K-means? 274 missing values
+
+
+#Converting our currency to 2020 USD
+tempDF <- train %>%
+  left_join(ex)
+
+train$budget <- train$budget * tempDF$exchange_rate
+
+train$budget[is.na(train$budget)] <-median(train$budget, na.rm = TRUE)
 ```
 
 
@@ -44,24 +78,29 @@ with(train, cor(gross, imdb_score, use="complete.obs"))
 
 
 
+```{r}
+ggplot(data=train, mapping=aes(x=log(num_user_for_reviews), y=imdb_score, color = content_rating)) +
+  geom_point()
+with(train, cor(gross, imdb_score, use="complete.obs"))
+```
 
 
 
 
+We notice some ridiculous budgets for our currency, so we will need to do some conversions.
+```{r}
+ggplot(data=train, mapping=aes(x=budget, y=imdb_score)) +
+  geom_point()
 
-
-
-
-
-
-
-
-
+train %>% filter(budget>4e8) %>% select(movie_title, country)
+```
 
 
 ```{r}
-pairs(~imdb_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
+ggplot(data=train, mapping=aes(x=budget, y=imdb_score)) +
+  geom_point()
 
+train %>% filter(budget>100000000, country=="USA") %>% select(movie_title, country)
 ```
 
 
@@ -100,14 +139,10 @@ train %>%
 
 ```
 
-```{r}
 
-dir <- train %>%
-  group_by(director_name) %>%
-  summarize(score = mean(imdb_score), n=n()) %>%
-  arrange(-score) %>%
-  filter(n > 1)
-
+<<<<<<< HEAD
 plot(dir$score)
 ```
 
+=======
+>>>>>>> e6001fbb040dd9ccd793a5d6fb853dbb8f12a180
