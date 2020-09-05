@@ -35,18 +35,44 @@ Regression Imputation - Filling in missing values with the regression predicted 
 ```{r}
 sum(is.na(train$plot_keywords))
 
-head(train$plot_keywords)
-colnames(train$genres %>% sapply(function(x) unlist(str_split(x, "\\|"))) %>% qdapTools::mtabulate())
-
-
-
+#Finds top keywords in dataframe
 keywordDF <- as.data.frame((train$plot_keywords %>% sapply(function(x) unlist(str_split(x, "[\\| ]"))) %>% unlist %>% unname %>% table %>% sort.int(decreasing = TRUE)))
 
-keywordDF[-(keywordDF$. %in% stopwords::stopwords("en")), ]
+#REmoves common words and takes top 100 words
+keywordDF <- keywordDF[-which(keywordDF$. %in% stopwords::stopwords("en")), ] %>% head(100)
 
+#creates emply list
+sumList = rep(0, length(keywordDF))
 
+#retreaves list of every keyword by row
+temp <- train$plot_keywords %>% sapply(function(x) unlist(str_split(x, "[\\| ]"))) %>% unname
+
+#compares every row and counts number of top key words in that row
+for (i in 1:length(temp)){
+  sumList[i] <- sum(unique(temp[[i]]) %in% keywordDF$.)
+}
+
+#sets list into dataframe
+train$num_Key_words <- sumList
+
+train$keyword_cat <- ifelse(train$num_Key_words < 2, "Low", "Medium")
+train$keyword_cat <- ifelse(train$num_Key_words > 4,"high", train$keyword_cat)
 ```
 
+```{r}
+boxplot(train$imdb_score~train$keyword_cat)
+
+hist(train$num_Key_words)
+
+ggplot(data=train, mapping=aes(x=num_Key_words, y=imdb_score)) +
+  geom_point()
+```
+
+
+```{r}
+colnames(train$genres %>% sapply(function(x) unlist(str_split(x, "\\|"))) %>% qdapTools::mtabulate())
+
+```
 
 
 
