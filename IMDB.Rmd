@@ -41,7 +41,10 @@ keywordDF <- as.data.frame((train$plot_keywords %>% sapply(function(x) unlist(st
 #REmoves common words and takes top 100 words
 keywordDF <- keywordDF[-which(keywordDF$. %in% stopwords::stopwords("en")), ] %>% head(100)
 
-#creates emply list
+#########################################################################
+#finds frequency of top key words per row
+
+#creates empty list
 sumList = rep(0, length(keywordDF))
 
 #retreaves list of every keyword by row
@@ -56,10 +59,18 @@ for (i in 1:length(temp)){
 train$num_Key_words <- sumList
 
 train$keyword_cat <- ifelse(train$num_Key_words < 2, "Low", "Medium")
-train$keyword_cat <- ifelse(train$num_Key_words > 4,"high", train$keyword_cat)
+train$keyword_cat <- ifelse(train$num_Key_words >= 4,"high", train$keyword_cat)
 
 sum(is.na(train$num_Key_words))
 sum(is.na(train$keyword_cat))
+
+
+#####################################################################
+# if we want dummy variables of top 100 words...
+
+tempDF <- train$plot_keywords %>% sapply(function(x) unlist(str_split(x, "[\\| ]"))) %>% qdapTools::mtabulate()
+
+tempDF[, colnames(tempDF) %in% keywordDF$. ]
 ```
 
 ```{r}
@@ -74,6 +85,12 @@ ggplot(data=train, mapping=aes(x=num_Key_words, y=imdb_score)) +
 
 ```{r}
 colnames(train$genres %>% sapply(function(x) unlist(str_split(x, "\\|"))) %>% qdapTools::mtabulate())
+
+train$genres %>% sapply(function(x) unlist(str_split(x, "\\|"))) %>% qdapTools::mtabulate()
+
+
+
+
 
 ```
 
