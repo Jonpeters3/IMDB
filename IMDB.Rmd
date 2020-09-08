@@ -57,6 +57,9 @@ train$num_Key_words <- sumList
 
 train$keyword_cat <- ifelse(train$num_Key_words < 2, "Low", "Medium")
 train$keyword_cat <- ifelse(train$num_Key_words > 4,"high", train$keyword_cat)
+
+sum(is.na(train$num_Key_words))
+sum(is.na(train$keyword_cat))
 ```
 
 ```{r}
