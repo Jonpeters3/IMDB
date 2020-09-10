@@ -12,12 +12,12 @@ Proffesors Analysis:
 
 ```{r setup, include=FALSE}
 library("tidyverse")
+library(DataExplorer)
 ```
 
 ```{r}
 test <- read.csv("imdb495/imdbTest.csv")
 train <- read.csv("imdb495/imdbTrain.csv")
-ex <- read.csv("imdb495/exchange_rates.csv")
 
 
 #we want to merge our test and training so that when we do out imputations are consistent
@@ -28,8 +28,10 @@ names(test)[names(test) == "Id"] <- "movie_title"
 Identifying some summary statistics and identifying missinf values in our data set.
 
 ```{r}
-
 summary(train)
+
+plot_correlation(train, type="continuous", 
+                 cor_args=list(use="pairwise.complete.obs"))
 ```
 
 ### Data Cleaning
@@ -112,65 +114,81 @@ tempDF <- train$plot_keywords %>% sapply(function(x) unlist(str_split(x, "[\\| ]
 
 tempDF[, colnames(tempDF) %in% keywordDF$. ]
 
-#I dont want it taking uo space in RAM though, so im deleting tempDF
+#I dont want it taking up space in RAM though, so im deleting tempDF
 rm(tempDF)
 ```
 
 
-After we came aback as a group, we didnt find anything too significant. As you can see above, the distributions dont really tell us there would be any significant pull on our response variable. All our categories and distribtions seem to be about the same, so we feel that this would not help us identify IMDB score.
+After we came aback as a group, we didn't find anything too significant. As you can see above, the distributions don't really tell us there would be any significant pull on our response variable. All our categories and distributions seem to be about the same, so we feel that this would not help us identify IMDB score.
 
-Ultimatley, we decided to drop this variable. It is what it is.
+Ultimately, we decided to drop this variable. It is what it is.
 
 ##### Rest of the variables
 Here begins the rest of the data cleaning done by the rest of the members of the class and the professor.
 
+###### Basic Cleaning (Mean, meadian, mode imputations)
 ```{r}
-train$language[is.na(train$language)] <-"English" #Replace language with english, most of the countries were USA, or english movies if country was NA
+#Duration - only one missing so just look it up and fill it in
+train[is.na(train$duration),]$duration <- 116
 
-train$country[is.na(train$country)] <-"USA" #Only 4 NA, either remove them or replace with USA
+## Color - mode imputation and convert to 0/1
+train <- train %>% 
+  mutate(color=replace(color, is.na(color), "Color"))
+train <- train %>%
+  mutate(color = ifelse(color == "Color", 1, 0))
 
-#drop number of user reviews
+## Language - only five missing values so we replace them
+missing_languages <- c("English", "None", "None", "None", "None")
+train$language[is.na(train$language)] <- missing_languages
+
+
+## num_user_for_reviews = mean imputation
+train <- train %>%
+  mutate(num_user_for_reviews=replace(num_user_for_reviews, is.na(num_user_for_reviews), 
+                                      mean(num_user_for_reviews, na.rm=TRUE)))
+
+## num_critic_for_reviews - Median imputation
+train[is.na(train[["num_critic_for_reviews"]]), "num_critic_for_reviews"] <- median(x = train[["num_critic_for_reviews"]], na.rm = TRUE)
+
 
 ## Director - convert to number of movies made by director
 director_movie_count <- train %>%
   group_by(director_name) %>%
   summarise(movies_made = n())
 
-```
-
-```{r}
-## Provided by Matthew Heaton
-## Ratings
 train <- train %>%
   left_join(director_movie_count) %>%
   select(-director_name)
 
+```
+
+###### Some of our categorical variables needing longer code
+```{r}
+## Content-rating - collapse GP --> PG and create "other"
+## X --> NC-17, TV-?? --> TV, M-->PG13
 train <- train %>%
   mutate(content_rating=fct_explicit_na(content_rating, na_level = "Unknown")) %>%
   mutate(content_rating=fct_collapse(content_rating, PG=c("GP", "PG"),
                                      NC17=c("X", "NC-17"),
                                      TV=c("TV-14", "TV-G", "TV-PG"),
                                      PG13=c("PG-13","M")))
-```
 
-```{r}
-## Provided by Matthew Heaton
 ## Genres - get the main genre and number of genres assigned
 train <- train %>% mutate(main_genre=(str_split(genres, "\\|") %>%
                                       sapply(., FUN=function(x){x[1]})),
                         num_genre=(str_split(genres, "\\|") %>%
                                      sapply(., FUN=length)))
-table(train$main_genre) 
-
 #Some genres only have 1 movie so create "other" category
 #that contains all categories with less than 10 movies
 other.cat <- train %>% group_by(main_genre) %>% 
   summarize(n=n()) %>% filter(n<10) %>% pull(main_genre)
 train <- train %>%
   mutate(main_genre=fct_collapse(main_genre, Other=other.cat))
+
+
 ```
 
-
+###### Linear Regression imputation for budget
 ```{r}
 ## linear regression for budget
 budget.lm <- lm(sqrt(budget)~num_critic_for_reviews+duration+num_voted_users+
@@ -181,6 +199,7 @@ train <- train %>%
   mutate(budget=replace(budget, is.na(budget), budget.preds))
 ```
 
+###### Stochastic Regression imputation for budget
 ```{r}
 ## stochastic regression for gross
 gross.lm <- lm(sqrt(gross)~num_critic_for_reviews+duration+num_voted_users+
@@ -194,39 +213,79 @@ train <- train %>%
   mutate(gross=replace(gross, is.na(gross), gross.preds))
 
 
-rm(list=c("gross.lm", "budget.lm"))
+
+```
+
+###### actor_name columns
+```{r}
+## we created num_top_actors which tell us how many “top” actors were in a movie. “Top” actors were actors who were in multiple movies. All 3 actor column were used to decide who was a top actor.
+all.actors <- train %>% select(actor_1_name, actor_2_name, actor_3_name) %>% do.call(c, args=.)
+actors.freq <- data.frame(actor=all.actors) %>% filter(!is.na(actor)) %>%
+  group_by(actor) %>% summarize(n=n()) %>%
+  arrange(desc(n))
+top.actors <- actors.freq %>% filter(n>10) %>% pull(actor)
+train <- train %>%
+  mutate(num_top_actors=(ifelse(actor_1_name%in%top.actors, 1, 0) +
+                           ifelse(actor_2_name%in%top.actors, 1, 0) +
+                           ifelse(actor_3_name%in%top.actors, 1, 0)))
+```
+
+###### facebook_like columns
+```{r}
+## we made a column num_pop_actors for the total number of popular actors in a movie based off of their Facebook likes. With this, we decided to throw out cast_facebook likes as it seemed repetitive. It’s pretty mute since there’s also actor Facebook likes
+
+actor.likes <- train %>% select(actor_1_facebook_likes, actor_2_facebook_likes, actor_3_facebook_likes) %>%
+  do.call(c, args=.)
+actors.likes <- data.frame(actor=all.actors, likes=actor.likes) %>%
+  filter(!is.na(actor)) %>% group_by(actor) %>% summarize(likes=max(likes)) %>%
+  arrange(desc(likes))
+pop.actors <- actors.likes %>% filter(likes>quantile(likes, probs=0.99)) %>%
+  pull(actor)
+train <- train %>%
+  mutate(num_pop_actors=(ifelse(actor_1_name%in%pop.actors, 1, 0) +
+                           ifelse(actor_2_name%in%pop.actors, 1, 0) +
+                           ifelse(actor_3_name%in%pop.actors, 1, 0)))
 ```
 
 
+###### Throwing out everything else (including the plot keywords)
+```{r}
+train <- train %>% select(-cast_total_facebook_likes, -movie_imdb_link, -facenumber_in_poster, -plot_keywords, -country, -movie_facebook_likes, -director_facebook_likes, -actor_1_name, -actor_2_name, -actor_3_name, -actor_1_facebook_likes, -actor_2_facebook_likes, -actor_3_facebook_likes, -genres, -cast_total_facebook_likes)
+```
 
+
+removing things off of RAM
+```{r}
+rm(list=c("gross.lm", "budget.lm", "actors.freq", "keywordDF", "temp", "director_movie_count", "actor.likes", "i", "gross.preds", "top.actors", "sumList", "pop.actors", "other.cat", "missing_languages", "budget.preds", "all.actors", "actors.likes"))
+```
+
+#### Writing cleaned data to csv, just cause
+```{r}
+write_csv(x=train, path="./CleanedIMDBData.csv")
+```
 
 
 ## Visualizations of our now clean data
 
 ```{r}
-tempDF <- train %>%
-  left_join(ex)
-
-train$budget <- train$budget * tempDF$exchange_rate
-
-pairs(~train_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
+pairs(~imdb_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
 ```
 
 
 
 ```{r}
-ggplot(data=train, mapping=aes(x=gross, y=train_score)) +
+ggplot(data=train, mapping=aes(x=gross, y=imdb_score)) +
   geom_point()
 
 
-with(train, cor(gross, train_score, use="complete.obs"))
+with(train, cor(gross, imdb_score, use="complete.obs"))
 ```
 
 
 ```{r}
-ggplot(data=train, mapping=aes(x=log(num_user_for_reviews), y=train_score, color = content_rating)) +
+ggplot(data=train, mapping=aes(x=log(num_user_for_reviews), y=imdb_score, color = content_rating)) +
   geom_point()
-with(train, cor(gross, train_score, use="complete.obs"))
+with(train, cor(gross, imdb_score, use="complete.obs"))
 ```
 
 
