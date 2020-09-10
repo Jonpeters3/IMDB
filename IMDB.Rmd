@@ -1,49 +1,72 @@
 ---
-title: "IMDB Predictions"
+title: "IMDB Scoring"
 author: "Peters"
 date: "8/31/2020"
 output: html_document
 ---
 
-Data avaiable through kaggle at: https://www.kaggle.com/c/imdb495
+This analysis was done as a class for my "Experimental Learning through Kaggle" class at BYU. This is a warning that much of this code is not my own, but each section will be contain a comment at the top if it was completed by someone else, if there is no indication, it was work of my own
 
-Objective: Determine a model that will help us predict imdb scores.
+Data avaiable through kaggle at: https://www.kaggle.com/c/train495
+Proffesors Analysis: 
 
 ```{r setup, include=FALSE}
 library("tidyverse")
 ```
 
 ```{r}
-test <- read.csv("imdb495/IMDBTest.csv")
-train <- read.csv("imdb495/IMDBTrain.csv")
+test <- read.csv("imdb495/imdbTest.csv")
+train <- read.csv("imdb495/imdbTrain.csv")
 ex <- read.csv("imdb495/exchange_rates.csv")
 
 
 #we want to merge our test and training so that when we do out imputations are consistent
 names(test)[names(test) == "Id"] <- "movie_title"
-(imdb <- bind_rows(train = train, test = test, .id="Set"))
+(train <- bind_rows(train = train, test = test, .id="Set"))
 ```
 
-Summarize data
+Identifying some summary statistics and identifying missinf values in our data set.
 
 ```{r}
+
 summary(train)
 ```
 
-Regression Imputation - Filling in missing values with the regression predicted values
+### Data Cleaning
+
+First, we want to clean out data. This will allow us to look through our variables, be able to visualize all of them and get an idea if which variables will be useful or not. Variables were split up between groups. My group was only given the **"plot_keywords"** since it was going to require a little more work then the others, which is found here first. All other data cleaning was done by toher classmates or the professor, which can be found later on.
+
+
+##### Plot Keywords
 
 ```{r}
-sum(is.na(train$plot_keywords))
+sum(is.na(train$plot_keywords)) #Number of missing plot keywords
 
+train$plot_keywords[1] #Example output so we know what were working with.
+
+```
+
+So, my group and I had many different ideas in how to handle this variable. But the first thing we needed to do identify how we would handle the strings as shown above. It was decided that we would not only split the strings by the "|", but also by spaces, and identify the most used (non-common) words and keep the top 100 words (since there were about 5000 words in total).
+
+
+```{r}
 #Finds top keywords in dataframe
 keywordDF <- as.data.frame((train$plot_keywords %>% sapply(function(x) unlist(str_split(x, "[\\| ]"))) %>% unlist %>% unname %>% table %>% sort.int(decreasing = TRUE)))
 
 #REmoves common words and takes top 100 words
 keywordDF <- keywordDF[-which(keywordDF$. %in% stopwords::stopwords("en")), ] %>% head(100)
 
-#########################################################################
-#finds frequency of top key words per row
+head(keywordDF)
+```
 
+Now that we know some of the most common words found in the key words, we needed to decide where to go from there. Some of teh ideas we came across were:
+* Create dummy variables for each of the topp 100 words, and give each variable some sort of score that would tell us which ones to keep.
+* Count how many of each of the top 100 words appears in each row and create a frequency variable. Also score these and create categorical variables on a scale of "Low", "Medium", and "High."
+* Create a continous variable between 0 and 1 that scores each movie on how siginicant their keywords are among the top 100.
+
+I decided to try frequency and see how that turn out.
+
+```{r}
 #creates empty list
 sumList = rep(0, length(keywordDF))
 
@@ -58,158 +81,152 @@ for (i in 1:length(temp)){
 #sets list into dataframe
 train$num_Key_words <- sumList
 
+#This will create categorical variables based on frequency, these limits are arbitrary
 train$keyword_cat <- ifelse(train$num_Key_words < 2, "Low", "Medium")
 train$keyword_cat <- ifelse(train$num_Key_words >= 4,"high", train$keyword_cat)
 
-sum(is.na(train$num_Key_words))
-sum(is.na(train$keyword_cat))
+```
+
+Here we will visualize our new variables
+```{r}
+ggplot(data=train, mapping=aes(x=keyword_cat, y=imdb_score)) +
+  geom_boxplot()  +
+  xlab("Number of Key Words") + ylab("IMDB Score") +
+  ggtitle("Key Word Category vs Score") + theme_light()
+
+ggplot(data=train, mapping=aes(x=num_Key_words)) +
+  geom_histogram() +
+  xlab("Number of Key Words") + ggtitle("Frequency of Key Words") + theme_light()
+
+ggplot(data=train, mapping=aes(x=num_Key_words, y=imdb_score)) +
+  geom_point() +
+  xlab("Number of Key Words") + ylab("IMDB Score") +
+  ggtitle("Frequency of Key Words vs Score") + theme_light()
+```
 
 
-#####################################################################
-# if we want dummy variables of top 100 words...
+```{r}
+# This is just an extra, I wanted to learn how to make dummies for top 100 words
 
 tempDF <- train$plot_keywords %>% sapply(function(x) unlist(str_split(x, "[\\| ]"))) %>% qdapTools::mtabulate()
 
 tempDF[, colnames(tempDF) %in% keywordDF$. ]
-```
 
-```{r}
-boxplot(train$imdb_score~train$keyword_cat)
-
-hist(train$num_Key_words)
-
-ggplot(data=train, mapping=aes(x=num_Key_words, y=imdb_score)) +
-  geom_point()
+#I dont want it taking uo space in RAM though, so im deleting tempDF
+rm(tempDF)
 ```
 
 
-```{r}
-colnames(train$genres %>% sapply(function(x) unlist(str_split(x, "\\|"))) %>% qdapTools::mtabulate())
+After we came aback as a group, we didnt find anything too significant. As you can see above, the distributions dont really tell us there would be any significant pull on our response variable. All our categories and distribtions seem to be about the same, so we feel that this would not help us identify IMDB score.
 
-train$genres %>% sapply(function(x) unlist(str_split(x, "\\|"))) %>% qdapTools::mtabulate()
+Ultimatley, we decided to drop this variable. It is what it is.
 
-
-
-
-
-```
-
-
-
+##### Rest of the variables
+Here begins the rest of the data cleaning done by the rest of the members of the class and the professor.
 
 ```{r}
-pairs(~imdb_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
-```
-
-
-For Class on Friday
-
-```{r}
-train$facenumber_in_poster[is.na(train$facenumber_in_poster)] <- mean(train$facenumber_in_poster, na.rm = TRUE) #Replace posters with mean
-
-print("missing keywords: ")
-sum(is.na(train$plot_keywords)) #Sum of missing keywords, probably shou;d just drop?
-
-print("missing links: ")
-sum(is.na(train$movie_imdb_link)) #Sum of missing links, probably should just drop?
-
-train$num_user_for_reviews[is.na(train$num_user_for_reviews)] <- median(train$facenumber_in_poster, na.rm = TRUE) #number of users
-
 train$language[is.na(train$language)] <-"English" #Replace language with english, most of the countries were USA, or english movies if country was NA
 
 train$country[is.na(train$country)] <-"USA" #Only 4 NA, either remove them or replace with USA
 
-train[is.na(train$content_rating),]  #Maybe this would be a good one to  use KNN or K-means? 274 missing values
+#drop number of user reviews
+
+## Director - convert to number of movies made by director
+director_movie_count <- train %>%
+  group_by(director_name) %>%
+  summarise(movies_made = n())
+
+```
+
+```{r}
+## Provided by Matthew Heaton
+## Ratings
+train <- train %>%
+  left_join(director_movie_count) %>%
+  select(-director_name)
+
+train <- train %>%
+  mutate(content_rating=fct_explicit_na(content_rating, na_level = "Unknown")) %>%
+  mutate(content_rating=fct_collapse(content_rating, PG=c("GP", "PG"),
+                                     NC17=c("X", "NC-17"),
+                                     TV=c("TV-14", "TV-G", "TV-PG"),
+                                     PG13=c("PG-13","M")))
+```
+
+```{r}
+## Provided by Matthew Heaton
+## Genres - get the main genre and number of genres assigned
+train <- train %>% mutate(main_genre=(str_split(genres, "\\|") %>%
+                                      sapply(., FUN=function(x){x[1]})),
+                        num_genre=(str_split(genres, "\\|") %>%
+                                     sapply(., FUN=length)))
+table(train$main_genre) 
+
+#Some genres only have 1 movie so create "other" category
+#that contains all categories with less than 10 movies
+other.cat <- train %>% group_by(main_genre) %>% 
+  summarize(n=n()) %>% filter(n<10) %>% pull(main_genre)
+train <- train %>%
+  mutate(main_genre=fct_collapse(main_genre, Other=other.cat))
+```
 
 
-#Converting our currency to 2020 USD
+```{r}
+## linear regression for budget
+budget.lm <- lm(sqrt(budget)~num_critic_for_reviews+duration+num_voted_users+
+                  cast_total_facebook_likes+title_year+
+                  movie_facebook_likes+main_genre, data=train)
+budget.preds <- (predict(budget.lm, newdata=(train %>% filter(is.na(budget)))))^2
+train <- train %>%
+  mutate(budget=replace(budget, is.na(budget), budget.preds))
+```
+
+```{r}
+## stochastic regression for gross
+gross.lm <- lm(sqrt(gross)~num_critic_for_reviews+duration+num_voted_users+
+                  cast_total_facebook_likes+title_year+
+                  movie_facebook_likes+main_genre+budget, data=train)
+
+gross.preds <- (predict(gross.lm, newdata=(train %>% filter(is.na(gross))))+
+                  rnorm(sum(is.na(train$gross)), 0, sigma(gross.lm)))^2
+
+train <- train %>%
+  mutate(gross=replace(gross, is.na(gross), gross.preds))
+
+
+rm(list=c("gross.lm", "budget.lm"))
+```
+
+
+
+
+
+## Visualizations of our now clean data
+
+```{r}
 tempDF <- train %>%
   left_join(ex)
 
 train$budget <- train$budget * tempDF$exchange_rate
 
-train$budget[is.na(train$budget)] <-median(train$budget, na.rm = TRUE)
+pairs(~train_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
 ```
 
+
+
 ```{r}
-ggplot(data=train, mapping=aes(x=gross, y=imdb_score)) +
+ggplot(data=train, mapping=aes(x=gross, y=train_score)) +
   geom_point()
 
 
-with(train, cor(gross, imdb_score, use="complete.obs"))
+with(train, cor(gross, train_score, use="complete.obs"))
 ```
 
 
-
-
-
-
-
 ```{r}
-ggplot(data=train, mapping=aes(x=log(num_user_for_reviews), y=imdb_score, color = content_rating)) +
+ggplot(data=train, mapping=aes(x=log(num_user_for_reviews), y=train_score, color = content_rating)) +
   geom_point()
-with(train, cor(gross, imdb_score, use="complete.obs"))
+with(train, cor(gross, train_score, use="complete.obs"))
 ```
 
 
-
-
-We notice some ridiculous budgets for our currency, so we will need to do some conversions.
-```{r}
-ggplot(data=train, mapping=aes(x=budget, y=imdb_score)) +
-  geom_point()
-
-train %>% filter(budget>4e8) %>% select(movie_title, country)
-```
-
-
-```{r}
-ggplot(data=train, mapping=aes(x=budget, y=imdb_score)) +
-  geom_point()
-
-train %>% filter(budget>100000000, country=="USA") %>% select(movie_title, country)
-```
-
-
-We notice some ridiculous budgets for our currency, so we will need to do some conversions.
-```{r}
-ggplot(data=train, mapping=aes(x=budget, y=imdb_score)) +
-  geom_point()
-
-train %>% filter(budget>1e9) %>% select(movie_title, country)
-```
-
-
-```{r}
-ggplot(data=train, mapping=aes(x=budget, y=imdb_score)) +
-  geom_point()
-
-train %>% filter(budget>100000000, country=="USA") %>% select(movie_title, country)
-```
-
-```{r}
-rating <- train %>%
-  group_by(content_rating) %>%
-  summarize(score = mean(imdb_score), n=n()) %>%
-  arrange(-score)
-
-rating
-barplot(rating$score, names.arg = rating$content_rating)
-```
-
-
-```{r}
-train %>%
-  group_by(color) %>%
-  summarize(score = mean(imdb_score), n=n()) %>%
-  arrange(-score)
-
-```
-
-
-<<<<<<< HEAD
-plot(dir$score)
-```
-
-=======
->>>>>>> e6001fbb040dd9ccd793a5d6fb853dbb8f12a180
