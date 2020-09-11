@@ -19,8 +19,11 @@ library(DataExplorer)
 test <- read.csv("imdb495/imdbTest.csv")
 train <- read.csv("imdb495/imdbTrain.csv")
 
+```
 
-#we want to merge our test and training so that when we do out imputations are consistent
+
+We want to merge our test and training so that when we do out imputations are consistent
+```{r}
 names(test)[names(test) == "Id"] <- "movie_title"
 (train <- bind_rows(train = train, test = test, .id="Set"))
 ```
@@ -250,7 +253,7 @@ train <- train %>%
 
 ###### Throwing out everything else (including the plot keywords)
 ```{r}
-train <- train %>% select(-cast_total_facebook_likes, -movie_imdb_link, -facenumber_in_poster, -plot_keywords, -country, -movie_facebook_likes, -director_facebook_likes, -actor_1_name, -actor_2_name, -actor_3_name, -actor_1_facebook_likes, -actor_2_facebook_likes, -actor_3_facebook_likes, -genres, -cast_total_facebook_likes)
+train <- train %>% select(-cast_total_facebook_likes, -movie_imdb_link, -facenumber_in_poster, -plot_keywords, -country, -movie_facebook_likes, -director_facebook_likes, -actor_1_name, -actor_2_name, -actor_3_name, -actor_1_facebook_likes, -actor_2_facebook_likes, -actor_3_facebook_likes, -genres, -cast_total_facebook_likes, -num_Key_words, -keyword_cat)
 ```
 
 
@@ -264,7 +267,7 @@ rm(list=c("gross.lm", "budget.lm", "actors.freq", "keywordDF", "temp", "director
 write_csv(x=train, path="./CleanedIMDBData.csv")
 ```
 
-
+Now since most
 ## Visualizations of our now clean data
 
 ```{r}
