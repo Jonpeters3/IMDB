@@ -344,6 +344,7 @@ elnet <- train(form=imdb_score~.,
                 )
 
 plot(elnet)
+elnet$bestTune
 ```
 
 
@@ -363,29 +364,40 @@ elnet <- train(form=imdb_score~.,
 
 plot(elnet)
 elnet$bestTune
+elnet$results
 
 imdb.preds <- data.frame(Id=imdb.test$movie_title, Predicted = predict(elnet, newdata = imdb.test))
 
-write_csv(x=imdb.preds, path="./Peters_Submisison_elnet.csv")
+write_csv(x=imdb.preds, path="./Peters_Submission_elnet.csv")
 ```
 
 
 ## gradient Boosting
 ```{r}
-tune.grid = expand.grid(n.trees = 100,
-                        interaction.depth = .,
-                        shrinkage (Shrinkage),
-                        n.minobsinnode)
+tune.grid = expand.grid(n.trees = seq(195, 205, 1),
+                        interaction.depth = seq(3.5, 5.5, .5),
+                        shrinkage = .16,
+                        n.minobsinnode = seq(14, 17, 1))
 
 boost <- train(form=imdb_score~., 
                 data=(imdb.train %>% select(-Set, -movie_title)),
                 method = "gbm",
                 trControl=trainControl(method="repeatedcv",
                                        number=10,
-                                       repeats = 3),
+                                       repeats = 2),
                tuneGrid = tune.grid,
                verbose = FALSE
                 )
 ```
 
+```{r}
+plot(boost)
+boost$bestTune
+boost$results
+```
+```{r}
+imdb.preds <- data.frame(Id=imdb.test$movie_title, Predicted = predict(boost, newdata = imdb.test))
+
+write_csv(x=imdb.preds, path="./Peters_Submission_boost.csv")
+```
 
