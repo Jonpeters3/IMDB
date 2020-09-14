@@ -7,8 +7,7 @@ output: html_document
 
 This analysis was done as a class for my "Experimental Learning through Kaggle" class at BYU. This is a warning that much of this code is not my own, but each section will be contain a comment at the top if it was completed by someone else, if there is no indication, it was work of my own
 
-Data available through kaggle at: https://www.kaggle.com/c/train495
-Professors Analysis: 
+Data for this model was part of an InClass competition hosted through Kaggle.
 
 ```{r setup, include=FALSE}
 library("tidyverse")
@@ -258,7 +257,9 @@ train <- train %>%
 
 ###### Throwing out everything else (including the plot keywords)
 ```{r}
-train <- train %>% select(-cast_total_facebook_likes, -movie_imdb_link, -facenumber_in_poster, -plot_keywords, -country, -movie_facebook_likes, -director_facebook_likes, -actor_1_name, -actor_2_name, -actor_3_name, -actor_1_facebook_likes, -actor_2_facebook_likes, -actor_3_facebook_likes, -cast_total_facebook_likes, -keyword_cat, -genres)
+train <- train %>% select(-cast_total_facebook_likes, -movie_imdb_link, #-facenumber_in_poster, 
+                          -plot_keywords, #-country,
+                          -movie_facebook_likes, -director_facebook_likes, -actor_1_name, -actor_2_name, -actor_3_name, -actor_1_facebook_likes, -actor_2_facebook_likes, -actor_3_facebook_likes, -cast_total_facebook_likes, -keyword_cat, -genres)
 ```
 
 
@@ -324,6 +325,68 @@ imdb.train <- imdb %>% filter(!is.na(imdb_score))
 imdb.test <- imdb %>% filter(is.na(imdb_score))
 ```
 
+
+
+## gradient Boosting
+
+For my own personal model, I decided to run with a stochastic gradient boost, mainly just because it was the model that I wanted to learn more about. So I ran through the model and did some tuning in order to hammer down my tuning parameter. This result gave me the best out of the previous two models, so this is the one I am rolling with for the remainder of this analysis.
+```{r}
+tune.grid = expand.grid(n.trees = 199,
+                        interaction.depth = c(5, 6, 7),
+                        shrinkage = c(.08, .09, .1),
+                        n.minobsinnode = c(15, 16))
+
+boost <- train(form=imdb_score~., 
+                data=(imdb.train %>% select(-Set, -movie_title)),
+                method = "gbm",
+                trControl=trainControl(method="repeatedcv",
+                                       number=20,
+                                       repeats = 10),
+               preProc = c("center","scale"),
+               tuneGrid = tune.grid,
+               verbose = FALSE
+                )
+
+#plot(boost)
+boost$bestTune
+boost$results
+```
+
+
+```{r}
+imdb.preds <- data.frame(Id=imdb.test$movie_title, Predicted = predict(boost, newdata = imdb.test))
+
+write_csv(x=imdb.preds, path="./holder_sub.csv")
+```
+
+```{r}
+imdb.preds <- data.frame(Id=imdb.test$movie_title, Predicted = predict(boost, newdata = imdb.test))
+
+write_csv(x=imdb.preds, path="./Peters_Submission_Boost.csv")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## linear regression
 ```{r}
 linreg <- train(form=imdb_score~., 
@@ -363,42 +426,6 @@ write_csv(x=imdb.preds, path="./Peters_Submission_elnet.csv")
 ```
 
 
-## gradient Boosting
 
-For my own personal model, I decided to run with a stochastic gradient boost, mainly jus because it was the model that I wanted to learn more about. So I ran through the model and did some tuning in order to hammer down my tuning paramter. This result gave me the best out of the previous two models, so this is the one I am rolling with for the remainder of this analysis.
-```{r}
-tune.grid = expand.grid(n.trees = 199,
-                        interaction.depth = 6,
-                        shrinkage = .09,
-                        n.minobsinnode = 16)
-
-boost <- train(form=imdb_score~., 
-                data=(imdb.train %>% select(-Set, -movie_title)),
-                method = "gbm",
-                trControl=trainControl(method="repeatedcv",
-                                       number=10,
-                                       repeats = 4),
-               preProc = c("center","scale"),
-               tuneGrid = tune.grid,
-               verbose = FALSE
-                )
-
-#plot(boost)
-boost$bestTune
-boost$results
-```
-
-
-```{r}
-imdb.preds <- data.frame(Id=imdb.test$movie_title, Predicted = predict(boost, newdata = imdb.test))
-
-write_csv(x=imdb.preds, path="./holder_sub.csv")
-```
-
-```{r}
-imdb.preds <- data.frame(Id=imdb.test$movie_title, Predicted = predict(boost, newdata = imdb.test))
-
-write_csv(x=imdb.preds, path="./Peters_Submission_boost5_THISONE.csv")
-```
 
 
