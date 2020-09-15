@@ -5,6 +5,8 @@ date: "8/31/2020"
 output: html_document
 ---
 
+https://github.com/Jonpeters3/IMDB
+
 This analysis was done as a class for my "Experimental Learning through Kaggle" class at BYU. This is a warning that much of this code is not my own, but each section will be contain a comment at the top if it was completed by someone else, if there is no indication, it was work of my own
 
 Data for this model was part of an InClass competition hosted through Kaggle.
@@ -134,6 +136,8 @@ Here begins the rest of the data cleaning done by the rest of the members of the
 #Duration - only one missing so just look it up and fill it in
 train[is.na(train$duration),]$duration <- 116
 
+train[is.na(train$facenumber_in_poster),]$facenumber_in_poster <- mean(train$facenumber_in_poster, na.rm=TRUE)
+
 ## Color - mode imputation and convert to 0/1
 train <- train %>% 
   mutate(color=replace(color, is.na(color), "Color"))
@@ -258,7 +262,7 @@ train <- train %>%
 ###### Throwing out everything else (including the plot keywords)
 ```{r}
 train <- train %>% select(-cast_total_facebook_likes, -movie_imdb_link, #-facenumber_in_poster, 
-                          -plot_keywords, #-country,
+                          -plot_keywords, -country,
                           -movie_facebook_likes, -director_facebook_likes, -actor_1_name, -actor_2_name, -actor_3_name, -actor_1_facebook_likes, -actor_2_facebook_likes, -actor_3_facebook_likes, -cast_total_facebook_likes, -keyword_cat, -genres)
 ```
 
@@ -331,25 +335,35 @@ imdb.test <- imdb %>% filter(is.na(imdb_score))
 
 For my own personal model, I decided to run with a stochastic gradient boost, mainly just because it was the model that I wanted to learn more about. So I ran through the model and did some tuning in order to hammer down my tuning parameter. This result gave me the best out of the previous two models, so this is the one I am rolling with for the remainder of this analysis.
 ```{r}
-tune.grid = expand.grid(n.trees = 199,
-                        interaction.depth = c(5, 6, 7),
-                        shrinkage = c(.08, .09, .1),
-                        n.minobsinnode = c(15, 16))
+tune.grid = expand.grid(n.trees = c(205, 206, 207),
+                        interaction.depth = c(8, 9, 10),
+                        shrinkage = c(.07, .08, .09),
+                        n.minobsinnode = c(13, 14, 15))
 
 boost <- train(form=imdb_score~., 
                 data=(imdb.train %>% select(-Set, -movie_title)),
                 method = "gbm",
                 trControl=trainControl(method="repeatedcv",
-                                       number=20,
+                                       number=10,
                                        repeats = 10),
                preProc = c("center","scale"),
                tuneGrid = tune.grid,
                verbose = FALSE
                 )
+beepr::beep("shotgun")
 
-#plot(boost)
+plot(boost)
 boost$bestTune
 boost$results
+
+```
+
+
+```{r}
+plot(boost)
+boost$bestTune
+boost$results
+boost$results[rownames(boost$results) == 24,]
 ```
 
 
@@ -365,13 +379,47 @@ imdb.preds <- data.frame(Id=imdb.test$movie_title, Predicted = predict(boost, ne
 write_csv(x=imdb.preds, path="./Peters_Submission_Boost.csv")
 ```
 
+```{r}
+
+```
+
+
+```{r}
+tune.grid = expand.grid(nrounds = seq(20, 50, 5),
+                        lambda= seq(.05, .15, .05),
+                        alpha=c(.75, .1),
+                        eta=seq(.2, .4, .1))
+
+boost1 <- train(form=imdb_score~., 
+                data=(imdb.train %>% select(-Set, -movie_title)),
+                method = "xgbTree",
+                trControl=trainControl(method="repeatedcv",
+                                       number=10,
+                                       repeats = 3),
+               #preProc = c("center","scale"),
+               #tuneGrid = tune.grid,
+               verbose = FALSE
+                )
+beepr::beep()
+
+plot(boost1)
+boost1$bestTune
+boost1$results
+```
+
+```{r}
+boost1$results[rownames(boost1$results) == 36,]$RMSE
+```
 
 
 
 
 
-
-
+```{r}
+plot(boost)
+boost1$bestTune
+boost1$results
+```
 
 
 
