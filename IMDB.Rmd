@@ -7,9 +7,9 @@ output: html_document
 
 https://github.com/Jonpeters3/IMDB
 
-This analysis was done as a class for my "Experimental Learning through Kaggle" class at BYU. This is a warning that much of this code is not my own, but each section will be contain a comment at the top if it was completed by someone else, if there is no indication, it was work of my own
+This analysis was done as a class for my "Experimental Learning through Kaggle" class at BYU. As I will explain later on, not all of this code is my own. Much of the data cleaning was completed by others in my class. We stared this analysis working together as a class, but once it came fitting a model, we had a competition to see whose model would be the best. I am pleased to say that I finished in second place!
 
-Data for this model was part of an InClass competition hosted through Kaggle.
+Data for this model was part of an InClass competition hosted through Kaggle and id available through my github.
 
 ```{r setup, include=FALSE}
 library("tidyverse")
@@ -20,17 +20,19 @@ library(caret)
 ```{r}
 test <- read.csv("imdb495/imdbTest.csv")
 train <- read.csv("imdb495/imdbTrain.csv")
-
 ```
 
 
-We want to merge our test and training so that when we do out imputations are consistent
+Because of all of the cleaning and imputations we will perform, we are going to combine our data sets so that we can have nice, clean, consistent data.
+
 ```{r}
 names(test)[names(test) == "Id"] <- "movie_title"
-(train <- bind_rows(train = train, test = test, .id="Set"))
+train <- bind_rows(train = train, test = test, .id="Set")
+str(train)
 ```
 
-Identifying some summary statistics and identifying missinf values in our data set.
+### **Data summary**
+In this portion of our analysis, we wanted to get a feel for our data and be able to visualize some of the relationships we have between our variables.
 
 ```{r}
 summary(train)
@@ -39,12 +41,36 @@ plot_correlation(train, type="continuous",
                  cor_args=list(use="pairwise.complete.obs"))
 ```
 
-### Data Cleaning
+```{r}
+pairs(~imdb_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
+
+plot_correlation(train, type="continuous", 
+                 cor_args=list(use="pairwise.complete.obs"))
+```
+
+So there does seem to still be some normality issues in parts of our data, so we will see how this affects our model later one.
+
+```{r}
+ggplot(data=train, mapping=aes(x=gross, y=imdb_score)) +
+  geom_point()
+
+
+with(train, cor(gross, imdb_score, use="complete.obs"))
+```
+
+
+```{r}
+ggplot(data=train, mapping=aes(x=num_user_for_reviews, y=gross, color = content_rating)) +
+  geom_point()
+with(train, cor(gross, imdb_score, use="complete.obs"))
+```
+
+
+### **Data Cleaning**
 
 First, we want to clean out data. This will allow us to look through our variables, be able to visualize all of them and get an idea if which variables will be useful or not. Variables were split up between groups. My group was only given the **"plot_keywords"** since it was going to require a little more work then the others, which is found here first. All other data cleaning was done by toher classmates or the professor, which can be found later on.
 
-
-##### Plot Keywords
+##### **Plot Keywords**
 
 ```{r}
 sum(is.na(train$plot_keywords)) #Number of missing plot keywords
@@ -53,7 +79,7 @@ train$plot_keywords[1] #Example output so we know what were working with.
 
 ```
 
-So, my group and I had many different ideas in how to handle this variable. But the first thing we needed to do identify how we would handle the strings as shown above. It was decided that we would not only split the strings by the "|", but also by spaces, and identify the most used (non-common) words and keep the top 100 words (since there were about 5000 words in total).
+So, my group and I had many different ideas in how to handle this variable. But the first thing we needed to do was identify how we would handle the strings as shown above. It was decided that we would not only split the strings by the "|", but also by spaces, and identify the most used (non-common) words and keep the top 100 words (since there were about 5000 words in total).
 
 
 ```{r}
@@ -66,10 +92,10 @@ keywordDF <- keywordDF[-which(keywordDF$. %in% stopwords::stopwords("en")), ] %>
 head(keywordDF)
 ```
 
-Now that we know some of the most common words found in the key words, we needed to decide where to go from there. Some of teh ideas we came across were:
-* Create dummy variables for each of the topp 100 words, and give each variable some sort of score that would tell us which ones to keep.
+Now that we know some of the most common words found in the key words, we needed to decide where to go from there. Some of the ideas we came across were:
+* Create dummy variables for each of the top 100 words, and give each variable some sort of score that would tell us which ones to keep.
 * Count how many of each of the top 100 words appears in each row and create a frequency variable. Also score these and create categorical variables on a scale of "Low", "Medium", and "High."
-* Create a continous variable between 0 and 1 that scores each movie on how siginicant their keywords are among the top 100.
+* Create a continuous variable between 0 and 1 that scores each movie on how significant their keywords are among the top 100.
 
 I decided to try frequency and see how that turn out.
 
@@ -94,7 +120,8 @@ train$keyword_cat <- ifelse(train$num_Key_words >= 4,"high", train$keyword_cat)
 
 ```
 
-Here we will visualize our new variables
+Here we will visualize our new variables.
+
 ```{r}
 ggplot(data=train, mapping=aes(x=keyword_cat, y=imdb_score)) +
   geom_boxplot()  +
@@ -111,13 +138,14 @@ ggplot(data=train, mapping=aes(x=num_Key_words, y=imdb_score)) +
   ggtitle("Frequency of Key Words vs Score") + theme_light()
 ```
 
+So as we can see there doesn't really seem to be any significant pull in the frequency of keywords on our response variable, or, we don't see that much correlation between the two.
+
+Below I just wanted to test my hand in creating dummy variables, which I never ended up including, just wanted to do it for the flex (and learn cause I didn't know how to do it).
 
 ```{r}
-# This is just an extra, I wanted to learn how to make dummies for top 100 words
-
 tempDF <- train$plot_keywords %>% sapply(function(x) unlist(str_split(x, "[\\| ]"))) %>% qdapTools::mtabulate()
 
-tempDF[, colnames(tempDF) %in% keywordDF$. ]
+tempDF <- tempDF[, colnames(tempDF) %in% keywordDF$. ]
 
 #I dont want it taking up space in RAM though, so im deleting tempDF
 rm(tempDF)
@@ -126,12 +154,13 @@ rm(tempDF)
 
 After we came aback as a group, we didn't find anything too significant. As you can see above, the distributions don't really tell us there would be any significant pull on our response variable. All our categories and distributions seem to be about the same, so we feel that this would not help us identify IMDB score.
 
-Ultimately, we decided to drop this variable. It is what it is.
+Ultimately, as a class we decided to drop it from out data frame when we came back together as a class. However, I later decided to include it and use both my frequency and categorical variables in my final model.
 
-##### Rest of the variables
+#### **Rest of the Variables**
 Here begins the rest of the data cleaning done by the rest of the members of the class and the professor.
 
-###### Basic Cleaning (Mean, meadian, mode imputations)
+###### **Basic Cleaning (Mean, meadian, mode imputations)**
+
 ```{r}
 #Duration - only one missing so just look it up and fill it in
 train[is.na(train$duration),]$duration <- 116
@@ -169,7 +198,8 @@ train <- train %>%
 
 ```
 
-###### Some of our categorical variables needing longer code
+###### **Some of our Categorical Variables Needing Longer Code**
+
 ```{r}
 ## Content-rating - collapse GP --> PG and create "other"
 ## X --> NC-17, TV-?? --> TV, M-->PG13
@@ -199,7 +229,8 @@ train <- train %>%
 ```
 
 
-###### Linear Regression imputation for budget
+###### **Linear Regression Imputation for Budget**
+
 ```{r}
 ## linear regression for budget
 budget.lm <- lm(sqrt(budget)~num_critic_for_reviews+duration+num_voted_users+
@@ -210,7 +241,8 @@ train <- train %>%
   mutate(budget=replace(budget, is.na(budget), budget.preds))
 ```
 
-###### Stochastic Regression imputation for budget
+###### **Stochastic Regression imputation for Budget**
+
 ```{r}
 ## stochastic regression for gross
 gross.lm <- lm(sqrt(gross)~num_critic_for_reviews+duration+num_voted_users+
@@ -227,7 +259,8 @@ train <- train %>%
 
 ```
 
-###### actor_name columns
+###### **actor_name Columns**
+
 ```{r}
 ## we created num_top_actors which tell us how many “top” actors were in a movie. “Top” actors were actors who were in multiple movies. All 3 actor column were used to decide who was a top actor.
 all.actors <- train %>% select(actor_1_name, actor_2_name, actor_3_name) %>% do.call(c, args=.)
@@ -241,7 +274,8 @@ train <- train %>%
                            ifelse(actor_3_name%in%top.actors, 1, 0)))
 ```
 
-###### facebook_like columns
+###### **facebook_like Columns**
+
 ```{r}
 ## we made a column num_pop_actors for the total number of popular actors in a movie based off of their Facebook likes. With this, we decided to throw out cast_facebook likes as it seemed repetitive. It’s pretty mute since there’s also actor Facebook likes
 
@@ -259,66 +293,43 @@ train <- train %>%
 ```
 
 
-###### Throwing out everything else (including the plot keywords)
+###### **Throwing out everything else (including the plot keywords)**
+So after cleaning all of our data
+
 ```{r}
 train <- train %>% select(-cast_total_facebook_likes, -movie_imdb_link, #-facenumber_in_poster, 
                           -plot_keywords, -country,
-                          -movie_facebook_likes, -director_facebook_likes, -actor_1_name, -actor_2_name, -actor_3_name, -actor_1_facebook_likes, -actor_2_facebook_likes, -actor_3_facebook_likes, -cast_total_facebook_likes, -keyword_cat, -genres)
+                          -movie_facebook_likes, -director_facebook_likes, -actor_1_name, -actor_2_name, -actor_3_name, -actor_1_facebook_likes, -actor_2_facebook_likes, -actor_3_facebook_likes, -cast_total_facebook_likes, #
+                          -keyword_cat, -genres)
 ```
 
 
-removing things off of RAM
+Now that were moving in our modeling, I wanted to clear up some RAM, so here Im getting ride of cleaning variables and DF's we created above.
 ```{r}
 rm(list=c("gross.lm", "budget.lm", "actors.freq", "keywordDF", "temp", "director_movie_count", "actor.likes", "i", "gross.preds", "top.actors", "sumList", "pop.actors", "other.cat", "missing_languages", "budget.preds", "all.actors", "actors.likes"))
 ```
 
 #### Writing cleaned data to csv, just cause
+
 ```{r}
 write_csv(x=train, path="./CleanedIMDBData.csv")
 ```
 
-Now since most
-## Visualizations of our now clean data
+I later decided to rename my data frame so its not to get confused with the notation when building our model
 
 ```{r}
-pairs(~imdb_score+num_critic_for_reviews+duration+gross+num_voted_users+num_user_for_reviews+budget+title_year+aspect_ratio, data = train)
-
-plot_correlation(train, type="continuous", 
-                 cor_args=list(use="pairwise.complete.obs"))
+imdb <- train
+rm(train)
 ```
 
-
-
-```{r}
-ggplot(data=train, mapping=aes(x=gross, y=imdb_score)) +
-  geom_point()
-
-
-with(train, cor(gross, imdb_score, use="complete.obs"))
-```
-
-
-```{r}
-ggplot(data=train, mapping=aes(x=num_user_for_reviews, y=gross, color = content_rating)) +
-  geom_point()
-with(train, cor(gross, imdb_score, use="complete.obs"))
-```
-### Fitting a model
-
-
-##### Linear regression
-```{r}
-imdb <- read_csv("CleanedIMDBData.csv")
-```
-
-Since we dont care about inference, we only care about predictability, we are going to go through some different transformations to better fit our data to our model. Dummy variables, and denter and scaling.
+We took some time to go over some preprocessing techniques. Since we don't care about inference, we only care about predictability, we are going to go through some different transformations to better fit our data to our model. Dummy variables, center and, scaling. the Caret Package can preprocess your data for you, so I simply have the code, but did not implement it into my dataframe.
 
 ```{r}
 #Dummary Vars
-IVTrands <- dummyVars(imdb_score~.-movie_title-Set, data=train)
+IVTrands <- dummyVars(imdb_score~.-movie_title-Set, data=imdb)
 imdb.iv <- predict(IVTrands, newdata = imdb) %>% as.data.frame() %>% bind_cols(., imdb %>% select(movie_title, Set, imdb_score))
 
-#Re Processing
+#PreProcessing
 pcTranss <- preProcess(x=imdb %>% select(-imdb_score), method = "pca")
 imdb.pc <- predict(pcTranss, newdata = imdb)
 
@@ -331,111 +342,13 @@ imdb.test <- imdb %>% filter(is.na(imdb_score))
 
 
 
-## gradient Boosting
+### **Fitting a Model**
 
-For my own personal model, I decided to run with a stochastic gradient boost, mainly just because it was the model that I wanted to learn more about. So I ran through the model and did some tuning in order to hammer down my tuning parameter. This result gave me the best out of the previous two models, so this is the one I am rolling with for the remainder of this analysis.
-```{r}
-tune.grid = expand.grid(n.trees = c(205, 206, 207),
-                        interaction.depth = c(8, 9, 10),
-                        shrinkage = c(.07, .08, .09),
-                        n.minobsinnode = c(13, 14, 15))
+For this portion we spent some time going through how to use the caret package in R. We learned some basic functions and how to tune our parameters to better our RMSE in order to get the best score possible in this competition. With out professor, we went over these first two models, linear regression and elastic net.
 
-boost <- train(form=imdb_score~., 
-                data=(imdb.train %>% select(-Set, -movie_title)),
-                method = "gbm",
-                trControl=trainControl(method="repeatedcv",
-                                       number=10,
-                                       repeats = 10),
-               preProc = c("center","scale"),
-               tuneGrid = tune.grid,
-               verbose = FALSE
-                )
-beepr::beep("shotgun")
+##### **Linear Regression**
+Simple linear regression, nothing special, just fitting our data.
 
-plot(boost)
-boost$bestTune
-boost$results
-
-```
-
-
-```{r}
-plot(boost)
-boost$bestTune
-boost$results
-boost$results[rownames(boost$results) == 24,]
-```
-
-
-```{r}
-imdb.preds <- data.frame(Id=imdb.test$movie_title, Predicted = predict(boost, newdata = imdb.test))
-
-write_csv(x=imdb.preds, path="./holder_sub.csv")
-```
-
-```{r}
-imdb.preds <- data.frame(Id=imdb.test$movie_title, Predicted = predict(boost, newdata = imdb.test))
-
-write_csv(x=imdb.preds, path="./Peters_Submission_Boost.csv")
-```
-
-```{r}
-
-```
-
-
-```{r}
-tune.grid = expand.grid(nrounds = seq(20, 50, 5),
-                        lambda= seq(.05, .15, .05),
-                        alpha=c(.75, .1),
-                        eta=seq(.2, .4, .1))
-
-boost1 <- train(form=imdb_score~., 
-                data=(imdb.train %>% select(-Set, -movie_title)),
-                method = "xgbTree",
-                trControl=trainControl(method="repeatedcv",
-                                       number=10,
-                                       repeats = 3),
-               #preProc = c("center","scale"),
-               #tuneGrid = tune.grid,
-               verbose = FALSE
-                )
-beepr::beep()
-
-plot(boost1)
-boost1$bestTune
-boost1$results
-```
-
-```{r}
-boost1$results[rownames(boost1$results) == 36,]$RMSE
-```
-
-
-
-
-
-```{r}
-plot(boost)
-boost1$bestTune
-boost1$results
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## linear regression
 ```{r}
 linreg <- train(form=imdb_score~., 
                 data=(imdb.train %>% select(-Set, -movie_title)),
@@ -448,9 +361,9 @@ linreg <- train(form=imdb_score~.,
 linreg$results
 ```
 
-## Elastic Net
+##### **Elastic Net**
+Using an elastic net method, we went through and learned out to tune the appropriate parameters.
 
-Tuning our elnet model
 ```{r}
 elnet.grid <- expand.grid(alpha=seq(.4, .8, length=10),
                           lambda=seq(0, .02, length=10))
@@ -470,10 +383,49 @@ elnet$results
 
 imdb.preds <- data.frame(Id=imdb.test$movie_title, Predicted = predict(elnet, newdata = imdb.test))
 
-write_csv(x=imdb.preds, path="./Peters_Submission_elnet.csv")
+#write_csv(x=imdb.preds, path="./Peters_Submission_elnet.csv")
+```
+
+##### **Gradient Boosting**
+
+For my own personal model, I decided to run with a stochastic gradient boost, mainly because it was the model that I wanted to learn more about. So I ran through the model and did some tuning in order to hammer down my tuning parameter. This result gave me the best out of the previous two models, so this is the one I am rolling with for the remainder of this analysis.
+
+```{r}
+tune.grid = expand.grid(n.trees = c(300, 325, 350),
+                        interaction.depth = 10,
+                        shrinkage = .05,
+                        n.minobsinnode = c(11, 12, 13))
+
+boost <- train(form=imdb_score~., 
+                data=(imdb.train %>% select(-Set, -movie_title)),
+                method = "gbm",
+                trControl=trainControl(method="repeatedcv",
+                                       number=10,
+                                       repeats = 5),
+               preProc = c("center","scale"),
+               tuneGrid = tune.grid,
+               verbose = FALSE
+                )
+beepr::beep()
+
+plot(boost) 
+boost$bestTune
+boost$results
+
+```
+
+I uploaded a few predictions to Kaggle, and my lowest score was an RMSE of .66966 on the test set! The results above were from previous attempts to try and get a lower RMSE on my training set before the competition closed.
+
+
+This simply saves the results to a csv so I can submit to kaggle
+
+```{r}
+imdb.preds <- data.frame(Id=imdb.test$movie_title, Predicted = predict(boost, newdata = imdb.test))
+
+write_csv(x=imdb.preds, path="./Peters_Submission_Boost.csv")
 ```
 
 
-
+And that's it! his competition was a lot of fun and I had a blast learning new skills in data cleaning and model fitting. I would love any feedback you have to offer on this project, so let me know!
 
 
